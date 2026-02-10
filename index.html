@@ -324,14 +324,21 @@
             });
             renderer.setSize(width, height);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-            // Lighting
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            // Lighting - bright and saturated
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
             scene.add(ambientLight);
 
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            directionalLight.position.set(5, 5, 10);
-            scene.add(directionalLight);
+            // Front light (main)
+            const frontLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            frontLight.position.set(0, 0, 10);
+            scene.add(frontLight);
+
+            // Side light for 3D effect when rotating
+            const sideLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            sideLight.position.set(10, 0, 5);
+            scene.add(sideLight);
 
             // Create card
             createCard();
@@ -386,9 +393,11 @@
             const geometry = new THREE.ExtrudeGeometry(cardShape, extrudeSettings);
             geometry.center();
 
-            // Load textures
+            // Load textures with sRGB color space
             const frontTexture = textureLoader.load(skin.front);
+            frontTexture.colorSpace = THREE.SRGBColorSpace;
             const backTexture = textureLoader.load(skin.back);
+            backTexture.colorSpace = THREE.SRGBColorSpace;
 
             // Edge material
             const edgeMaterial = new THREE.MeshStandardMaterial({ color: skin.edge });
@@ -414,9 +423,12 @@
             }
 
             // Add front face
-            const frontMaterial = new THREE.MeshBasicMaterial({ 
+            const frontMaterial = new THREE.MeshStandardMaterial({ 
                 map: frontTexture,
-                side: THREE.FrontSide
+                side: THREE.FrontSide,
+                roughness: 0.5,
+                metalness: 0.0,
+                envMapIntensity: 0.5
             });
             const frontPlane = new THREE.Mesh(faceGeometry.clone(), frontMaterial);
             frontPlane.position.z = depth / 2 + 0.02;
@@ -424,9 +436,12 @@
             card.add(frontPlane);
 
             // Add back face
-            const backMaterial = new THREE.MeshBasicMaterial({ 
+            const backMaterial = new THREE.MeshStandardMaterial({ 
                 map: backTexture,
-                side: THREE.FrontSide
+                side: THREE.FrontSide,
+                roughness: 0.5,
+                metalness: 0.0,
+                envMapIntensity: 0.5
             });
             const backPlane = new THREE.Mesh(faceGeometry.clone(), backMaterial);
             backPlane.position.z = -depth / 2 - 0.02;
@@ -441,24 +456,27 @@
             const textureLoader = new THREE.TextureLoader();
             const skin = skins[currentSkin];
 
-            const frontTexture = textureLoader.load(skin.front);
-            const backTexture = textureLoader.load(skin.back);
-
             // Update edge color
             card.material.color.setHex(skin.edge);
 
             // Update front plane
             const frontPlane = card.getObjectByName('front');
             if (frontPlane) {
-                frontPlane.material.map = frontTexture;
-                frontPlane.material.needsUpdate = true;
+                textureLoader.load(skin.front, (texture) => {
+                    texture.colorSpace = THREE.SRGBColorSpace;
+                    frontPlane.material.map = texture;
+                    frontPlane.material.needsUpdate = true;
+                });
             }
 
             // Update back plane
             const backPlane = card.getObjectByName('back');
             if (backPlane) {
-                backPlane.material.map = backTexture;
-                backPlane.material.needsUpdate = true;
+                textureLoader.load(skin.back, (texture) => {
+                    texture.colorSpace = THREE.SRGBColorSpace;
+                    backPlane.material.map = texture;
+                    backPlane.material.needsUpdate = true;
+                });
             }
         }
 
