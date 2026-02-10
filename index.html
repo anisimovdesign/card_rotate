@@ -643,15 +643,16 @@
                 navigator.vibrate(5);
             }
             
-            // Shake animation
-            shakeCard();
+            // Shake animation - direction based on which skin selected
+            const direction = index === 1 ? 1 : -1; // right skin = right dip, left skin = left dip
+            shakeCard(direction);
         }
         
-        function shakeCard() {
+        function shakeCard(direction = 1) {
             const duration = 350; // ms
             const startTime = performance.now();
             const intensity = 0.04;
-            const dipIntensity = 0.12; // X axis dip amount
+            const dipIntensity = 0.12 * direction; // direction determines dip side
             
             function shakeAnimation(currentTime) {
                 const elapsed = currentTime - startTime;
@@ -665,9 +666,9 @@
                     const dipProgress = Math.sin(progress * Math.PI);
                     shakeOffset.y = dipIntensity * dipProgress;
                     
-                    // X and Z: random shake with decay
+                    // X: random shake with decay
                     shakeOffset.x = (Math.random() - 0.5) * intensity * decay;
-                    shakeOffset.z = (Math.random() - 0.5) * intensity * 0.5 * decay;
+                    shakeOffset.z = 0;
                     
                     requestAnimationFrame(shakeAnimation);
                 } else {
