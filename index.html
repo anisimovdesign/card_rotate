@@ -34,14 +34,6 @@
             transition: background 0.3s ease;
         }
 
-        body.skin-0 {
-            background: radial-ellipse(ellipse at 1% 0%, rgb(105, 230, 69) 0%, rgb(224, 250, 209) 100%);
-        }
-
-        body.skin-1 {
-            background: radial-ellipse(ellipse at 7% -4%, rgb(158, 242, 186) 0%, rgb(224, 255, 235) 100%);
-        }
-
         .background-gradient {
             position: fixed;
             top: 0;
@@ -108,12 +100,13 @@
             align-items: center;
             justify-content: center;
             padding-bottom: 280px;
+            overflow: visible;
         }
 
         #card-canvas {
             width: 100%;
-            max-width: 400px;
-            height: 260px;
+            max-width: 450px;
+            height: 400px;
             touch-action: none;
         }
 
@@ -252,10 +245,10 @@
             
             <!-- Skin picker -->
             <div class="skin-picker">
-                <div class="skin-circle selected" data-skin="0" onclick="selectSkin(0)">
+                <div class="skin-circle selected" data-skin="0" id="skin-btn-0">
                     <div class="skin-circle-inner skin-0-gradient"></div>
                 </div>
-                <div class="skin-circle" data-skin="1" onclick="selectSkin(1)">
+                <div class="skin-circle" data-skin="1" id="skin-btn-1">
                     <div class="skin-circle-inner skin-1-gradient"></div>
                 </div>
             </div>
@@ -274,9 +267,19 @@
     </div>
 
     <!-- Three.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
     
-    <script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
         // Card skins configuration
         const skins = [
             {
@@ -296,7 +299,6 @@
         let rotationY = 0;
         let targetRotationY = 0;
         let lastRotationY = 0;
-        let tiltX = 0, tiltY = 0;
         let isDragging = false;
         let startX = 0;
         let isShowingBack = false;
@@ -312,7 +314,7 @@
 
             // Camera
             camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-            camera.position.z = 5;
+            camera.position.z = 4.5;
 
             // Renderer
             renderer = new THREE.WebGLRenderer({ 
@@ -348,27 +350,89 @@
             // Card dimensions (credit card ratio ~1.586:1)
             const width = 3.2;
             const height = 2.02;
-            const depth = 0.05;
-
-            const geometry = new THREE.BoxGeometry(width, height, depth);
+            const depth = 0.06;
+            const cornerRadius = 0.18;
+            
+            // Create rounded rectangle shape
+            function createRoundedRectShape(w, h, r) {
+                const shape = new THREE.Shape();
+                const x = -w / 2;
+                const y = -h / 2;
+                
+                shape.moveTo(x + r, y);
+                shape.lineTo(x + w - r, y);
+                shape.quadraticCurveTo(x + w, y, x + w, y + r);
+                shape.lineTo(x + w, y + h - r);
+                shape.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+                shape.lineTo(x + r, y + h);
+                shape.quadraticCurveTo(x, y + h, x, y + h - r);
+                shape.lineTo(x, y + r);
+                shape.quadraticCurveTo(x, y, x + r, y);
+                
+                return shape;
+            }
+            
+            const cardShape = createRoundedRectShape(width, height, cornerRadius);
+            
+            // Extrude the shape to create 3D card body
+            const extrudeSettings = {
+                depth: depth,
+                bevelEnabled: true,
+                bevelThickness: 0.01,
+                bevelSize: 0.01,
+                bevelSegments: 3
+            };
+            
+            const geometry = new THREE.ExtrudeGeometry(cardShape, extrudeSettings);
+            geometry.center();
 
             // Load textures
             const frontTexture = textureLoader.load(skin.front);
             const backTexture = textureLoader.load(skin.back);
 
-            // Materials for each face of the box:
-            // order: right, left, top, bottom, front, back
-            const materials = [
-                new THREE.MeshStandardMaterial({ color: skin.edge }), // right edge
-                new THREE.MeshStandardMaterial({ color: skin.edge }), // left edge
-                new THREE.MeshStandardMaterial({ color: skin.edge }), // top edge
-                new THREE.MeshStandardMaterial({ color: skin.edge }), // bottom edge
-                new THREE.MeshStandardMaterial({ map: frontTexture }), // front
-                new THREE.MeshStandardMaterial({ map: backTexture })   // back
-            ];
+            // Edge material
+            const edgeMaterial = new THREE.MeshStandardMaterial({ color: skin.edge });
 
-            card = new THREE.Mesh(geometry, materials);
+            card = new THREE.Mesh(geometry, edgeMaterial);
             scene.add(card);
+
+            // Create face geometry with same shape (same size as card)
+            const faceShape = createRoundedRectShape(width, height, cornerRadius);
+            const faceGeometry = new THREE.ShapeGeometry(faceShape);
+            
+            // Fix UV mapping for the shape
+            const faceWidth = width;
+            const faceHeight = height;
+            const uvAttribute = faceGeometry.attributes.uv;
+            for (let i = 0; i < uvAttribute.count; i++) {
+                const u = uvAttribute.getX(i);
+                const v = uvAttribute.getY(i);
+                uvAttribute.setXY(i, 
+                    (u + faceWidth / 2) / faceWidth,
+                    (v + faceHeight / 2) / faceHeight
+                );
+            }
+
+            // Add front face
+            const frontMaterial = new THREE.MeshBasicMaterial({ 
+                map: frontTexture,
+                side: THREE.FrontSide
+            });
+            const frontPlane = new THREE.Mesh(faceGeometry.clone(), frontMaterial);
+            frontPlane.position.z = depth / 2 + 0.02;
+            frontPlane.name = 'front';
+            card.add(frontPlane);
+
+            // Add back face
+            const backMaterial = new THREE.MeshBasicMaterial({ 
+                map: backTexture,
+                side: THREE.FrontSide
+            });
+            const backPlane = new THREE.Mesh(faceGeometry.clone(), backMaterial);
+            backPlane.position.z = -depth / 2 - 0.02;
+            backPlane.rotation.y = Math.PI;
+            backPlane.name = 'back';
+            card.add(backPlane);
         }
 
         function updateCardTextures() {
@@ -380,16 +444,22 @@
             const frontTexture = textureLoader.load(skin.front);
             const backTexture = textureLoader.load(skin.back);
 
-            // Update front (index 4) and back (index 5)
-            card.material[4].map = frontTexture;
-            card.material[4].needsUpdate = true;
-            card.material[5].map = backTexture;
-            card.material[5].needsUpdate = true;
+            // Update edge color
+            card.material.color.setHex(skin.edge);
 
-            // Update edge colors
-            [0, 1, 2, 3].forEach(i => {
-                card.material[i].color.setHex(skin.edge);
-            });
+            // Update front plane
+            const frontPlane = card.getObjectByName('front');
+            if (frontPlane) {
+                frontPlane.material.map = frontTexture;
+                frontPlane.material.needsUpdate = true;
+            }
+
+            // Update back plane
+            const backPlane = card.getObjectByName('back');
+            if (backPlane) {
+                backPlane.material.map = backTexture;
+                backPlane.material.needsUpdate = true;
+            }
         }
 
         function setupEventListeners() {
@@ -406,36 +476,12 @@
             canvas.addEventListener('mouseup', onMouseUp);
             canvas.addEventListener('mouseleave', onMouseUp);
 
-            // Gyroscope disabled for now
-            // if (window.DeviceOrientationEvent) {
-            //     if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-            //         document.body.addEventListener('click', requestGyroPermission, { once: true });
-            //     } else {
-            //         window.addEventListener('deviceorientation', onDeviceOrientation);
-            //     }
-            // }
-
             // Resize
             window.addEventListener('resize', onResize);
-        }
 
-        function requestGyroPermission() {
-            DeviceOrientationEvent.requestPermission()
-                .then(response => {
-                    if (response === 'granted') {
-                        window.addEventListener('deviceorientation', onDeviceOrientation);
-                    }
-                })
-                .catch(console.error);
-        }
-
-        function onDeviceOrientation(event) {
-            if (event.gamma !== null && event.beta !== null) {
-                // gamma: left/right tilt (-90 to 90)
-                // beta: front/back tilt (-180 to 180)
-                tiltX = event.gamma * 0.3; // Sensitivity
-                tiltY = (event.beta - 45) * 0.2; // Offset for natural phone holding position
-            }
+            // Skin buttons
+            document.getElementById('skin-btn-0').addEventListener('click', () => selectSkin(0));
+            document.getElementById('skin-btn-1').addEventListener('click', () => selectSkin(1));
         }
 
         function onTouchStart(e) {
@@ -481,12 +527,11 @@
         }
 
         function checkFlip() {
-            const totalAngle = Math.abs((targetRotationY + tiltX) % 360);
+            const totalAngle = Math.abs(targetRotationY % 360);
             const newIsShowingBack = totalAngle > 90 && totalAngle < 270;
             
             if (newIsShowingBack !== isShowingBack) {
                 isShowingBack = newIsShowingBack;
-                // Haptic feedback
                 if (navigator.vibrate) {
                     navigator.vibrate(10);
                 }
@@ -516,12 +561,7 @@
             rotationY += (targetRotationY - rotationY) * 0.15;
 
             if (card) {
-                // Apply rotation with gyroscope tilt
-                const totalRotationY = (rotationY + tiltX) * Math.PI / 180;
-                const rotationX = tiltY * Math.PI / 180;
-                
-                card.rotation.y = totalRotationY;
-                card.rotation.x = rotationX;
+                card.rotation.y = rotationY * Math.PI / 180;
             }
 
             renderer.render(scene, camera);
@@ -552,7 +592,7 @@
         }
 
         // Initialize on load
-        window.addEventListener('load', init);
+        init();
     </script>
 </body>
 </html>
