@@ -500,15 +500,14 @@
             document.getElementById('skin-btn-0').addEventListener('click', () => selectSkin(0));
             document.getElementById('skin-btn-1').addEventListener('click', () => selectSkin(1));
 
-            // Device orientation (gyroscope)
-            if (window.DeviceOrientationEvent) {
-                // Request permission on iOS 13+
-                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    document.body.addEventListener('click', requestGyroPermission, { once: true });
-                } else {
-                    window.addEventListener('deviceorientation', onDeviceOrientation);
-                }
-            }
+            // Device orientation (gyroscope) - disabled for now
+            // if (window.DeviceOrientationEvent) {
+            //     if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            //         document.body.addEventListener('click', requestGyroPermission, { once: true });
+            //     } else {
+            //         window.addEventListener('deviceorientation', onDeviceOrientation);
+            //     }
+            // }
         }
 
         function requestGyroPermission() {
