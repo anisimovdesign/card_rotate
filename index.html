@@ -606,18 +606,21 @@
             rotationY += (targetRotationY - rotationY) * 0.15;
 
             if (card) {
-                // Apply rotation with gyroscope tilt
+                // Apply rotation with gyroscope tilt + shake effect
                 const totalRotationY = (rotationY + tiltX) * Math.PI / 180;
                 const rotationX = tiltY * Math.PI / 180;
                 
-                card.rotation.y = totalRotationY;
-                card.rotation.x = rotationX;
+                card.rotation.y = totalRotationY + shakeOffset.y;
+                card.rotation.x = rotationX + shakeOffset.x;
+                card.rotation.z = shakeOffset.z;
             }
 
             renderer.render(scene, camera);
         }
 
-        // Skin selection
+        // Skin selection with shake effect
+        let shakeOffset = { x: 0, y: 0, z: 0 };
+        
         function selectSkin(index) {
             if (currentSkin === index) return;
             
@@ -639,6 +642,43 @@
             if (navigator.vibrate) {
                 navigator.vibrate(5);
             }
+            
+            // Shake animation
+            shakeCard();
+        }
+        
+        function shakeCard() {
+            const duration = 350; // ms
+            const startTime = performance.now();
+            const intensity = 0.04;
+            const dipIntensity = 0.12; // X axis dip amount
+            
+            function shakeAnimation(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = elapsed / duration;
+                
+                if (progress < 1) {
+                    // Decay factor - shake gets weaker over time
+                    const decay = 1 - progress;
+                    
+                    // Y axis: dip (rotate) and return (sine curve)
+                    const dipProgress = Math.sin(progress * Math.PI);
+                    shakeOffset.y = dipIntensity * dipProgress;
+                    
+                    // X and Z: random shake with decay
+                    shakeOffset.x = (Math.random() - 0.5) * intensity * decay;
+                    shakeOffset.z = (Math.random() - 0.5) * intensity * 0.5 * decay;
+                    
+                    requestAnimationFrame(shakeAnimation);
+                } else {
+                    // Reset shake
+                    shakeOffset.x = 0;
+                    shakeOffset.y = 0;
+                    shakeOffset.z = 0;
+                }
+            }
+            
+            requestAnimationFrame(shakeAnimation);
         }
 
         // Initialize on load
